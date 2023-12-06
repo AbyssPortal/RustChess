@@ -14,8 +14,8 @@ pub mod chess_io {
                             print!(
                                 "{}",
                                 match (i + j) % 2 {
-                                    0 => '🔲',
-                                    1 => '⬛',
+                                    1 => '🔲',
+                                    0 => '⬛',
                                     _ => {
                                         panic!("unreachable");
                                     }
@@ -26,7 +26,7 @@ pub mod chess_io {
                 }
                 println!();
             }
-            println!("  A B C D E F G H");
+            println!("  A B C D E F G H      Turn: {}", self.get_turn().to_string());
         }
     }
 
