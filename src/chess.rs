@@ -1,7 +1,6 @@
 #[allow(dead_code)]
 pub mod chess {
     use core::panic;
-    use std::vec;
 
     pub const BOARD_SIZE: usize = 8;
 
@@ -15,6 +14,24 @@ pub mod chess {
     pub enum Color {
         White,
         Black,
+    }
+
+    impl ToString for Color {
+        fn to_string(&self) -> String {
+            String::from(match self {
+                Self::White => "White",
+                Self::Black => "Black",
+            })
+        }
+    }
+
+    impl Color {
+        pub fn opposite(&self) -> Color {
+            match self {
+                Color::White => Color::Black,
+                Color::Black => Color::White,
+            }
+        }
     }
 
     #[derive(Copy, Clone, Debug)]
@@ -37,15 +54,18 @@ pub mod chess {
     #[derive(Debug)]
     pub enum BoardError {
         OutOfBoundsError,
+        IllegalMoveError,
+        NoPieceError,
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, PartialEq, Clone, Copy)]
 
+    //TODO: turn into enum with moves such as castles and en passent
     pub struct ChessMove {
-        initial_row: usize,
-        initial_col: usize,
-        destination_row: usize,
-        destination_col: usize,
+        pub initial_row: usize,
+        pub initial_col: usize,
+        pub destination_row: usize,
+        pub destination_col: usize,
     }
 
     fn in_bounds(row: usize, col: usize) -> bool {
@@ -57,7 +77,7 @@ pub mod chess {
         let board = make_board_from_fen("8/8/8/4R3/8/8/8/8/ w KQkq - 0 1").unwrap();
         board.print_board();
         let res = board.generate_moves(4, 4);
-        println!("{:?}", res.unwrap().unwrap().len());
+        println!("{:?}", res.unwrap().len());
     }
 
     impl Board {
@@ -68,6 +88,61 @@ pub mod chess {
             Ok(self.squares[row][col])
         }
 
+        pub fn get_turn(&self) -> Color {
+            return self.turn;
+        }
+
+        pub fn make_legal_move(&mut self, chess_move: ChessMove) -> Result<(), BoardError> {
+            let piece_option = self.get_piece(chess_move.initial_row, chess_move.initial_col)?;
+            match piece_option {
+                Some(Piece { kind: _, color }) => {
+                    if color != self.turn {
+                        return Err(BoardError::IllegalMoveError);
+                    }
+                }
+                None => {
+                    return Err(BoardError::NoPieceError);
+                }
+            }
+            let moves = self.generate_moves(chess_move.initial_row, chess_move.initial_col)?;
+            if moves.contains(&chess_move) {
+                self.make_move(chess_move);
+                return Ok(());
+            } else {
+                return Err(BoardError::IllegalMoveError);
+            }
+        }
+
+        fn make_move(&mut self, chess_move: ChessMove) {
+            self.squares[chess_move.destination_row][chess_move.destination_col] =
+                self.squares[chess_move.initial_row][chess_move.initial_col];
+            self.squares[chess_move.initial_row][chess_move.initial_col] = None;
+            //if we're in the white row and moved the starting locations
+            //TODO: chess960 or smth
+
+            if chess_move.initial_row == 0
+                && (chess_move.initial_col == 4 || chess_move.initial_col == 0)
+            {
+                self.castle_rights.white.queen = false;
+            }
+            if chess_move.initial_row == 0
+                && (chess_move.initial_col == 4 || chess_move.initial_col == 7)
+            {
+                self.castle_rights.white.king = false;
+            }
+            if chess_move.initial_row == 7
+                && (chess_move.initial_col == 4 || chess_move.initial_col == 0)
+            {
+                self.castle_rights.black.queen = false;
+            }
+            if chess_move.initial_row == 7
+                && (chess_move.initial_col == 4 || chess_move.initial_col == 7)
+            {
+                self.castle_rights.black.king = false;
+            }
+            self.turn = self.turn.opposite();
+        }
+
         //returns a result (which errors in case of an error)
         //of an option (which is empty if there is no piece at the selected coordinates)
         //of a vector
@@ -76,7 +151,7 @@ pub mod chess {
             &self,
             origin_row: usize,
             origin_col: usize,
-        ) -> Result<Option<Vec<ChessMove>>, BoardError> {
+        ) -> Result<Vec<ChessMove>, BoardError> {
             use PieceKind::*;
             let piece_option = self.get_piece(origin_row, origin_col)?;
             match piece_option {
@@ -84,27 +159,221 @@ pub mod chess {
                     let res: Vec<ChessMove> = match piece {
                         Piece { kind: Rook, color } => {
                             //right, up, left, down
+                            let mut moves = self.generate_linear_moves(
+                                origin_row, origin_col, 1, 0, color, BOARD_SIZE,
+                            );
+                            moves.extend(self.generate_linear_moves(
+                                origin_row, origin_col, 0, 1, color, BOARD_SIZE,
+                            ));
+                            moves.extend(self.generate_linear_moves(
+                                origin_row, origin_col, -1, 0, color, BOARD_SIZE,
+                            ));
+                            moves.extend(self.generate_linear_moves(
+                                origin_row, origin_col, 0, -1, color, BOARD_SIZE,
+                            ));
+                            moves
+                        }
+                        Piece {
+                            kind: Bishop,
+                            color,
+                        } => {
+                            let mut moves = self.generate_linear_moves(
+                                origin_row, origin_col, 1, 1, color, BOARD_SIZE,
+                            );
+                            moves.extend(self.generate_linear_moves(
+                                origin_row, origin_col, 1, -1, color, BOARD_SIZE,
+                            ));
+                            moves.extend(self.generate_linear_moves(
+                                origin_row, origin_col, -1, 1, color, BOARD_SIZE,
+                            ));
+                            moves.extend(self.generate_linear_moves(
+                                origin_row, origin_col, -1, -1, color, BOARD_SIZE,
+                            ));
+                            moves
+                        }
+                        Piece { kind: Queen, color } => {
+                            //right, up, left, down
+                            let mut moves = self.generate_linear_moves(
+                                origin_row, origin_col, 1, 1, color, BOARD_SIZE,
+                            );
+                            moves.extend(self.generate_linear_moves(
+                                origin_row, origin_col, 1, -1, color, BOARD_SIZE,
+                            ));
+                            moves.extend(self.generate_linear_moves(
+                                origin_row, origin_col, -1, 1, color, BOARD_SIZE,
+                            ));
+                            moves.extend(self.generate_linear_moves(
+                                origin_row, origin_col, -1, -1, color, BOARD_SIZE,
+                            ));
+                            moves.extend(self.generate_linear_moves(
+                                origin_row, origin_col, 1, 0, color, BOARD_SIZE,
+                            ));
+                            moves.extend(self.generate_linear_moves(
+                                origin_row, origin_col, 0, 1, color, BOARD_SIZE,
+                            ));
+                            moves.extend(self.generate_linear_moves(
+                                origin_row, origin_col, -1, 0, color, BOARD_SIZE,
+                            ));
+                            moves.extend(self.generate_linear_moves(
+                                origin_row, origin_col, 0, -1, color, BOARD_SIZE,
+                            ));
+                            moves
+                        }
+                        Piece { kind: King, color } => {
+                            //right, up, left, down
                             let mut moves =
-                                self.generate_linear_moves(origin_row, origin_col, 1, 0, color);
+                                self.generate_linear_moves(origin_row, origin_col, 1, 1, color, 1);
                             moves.extend(
-                                self.generate_linear_moves(origin_row, origin_col, 0, 1, color),
+                                self.generate_linear_moves(origin_row, origin_col, 1, -1, color, 1),
                             );
                             moves.extend(
-                                self.generate_linear_moves(origin_row, origin_col, -1, 0, color),
+                                self.generate_linear_moves(origin_row, origin_col, -1, 1, color, 1),
                             );
                             moves.extend(
-                                self.generate_linear_moves(origin_row, origin_col, 0, -1, color),
+                                self.generate_linear_moves(
+                                    origin_row, origin_col, -1, -1, color, 1,
+                                ),
+                            );
+                            moves.extend(
+                                self.generate_linear_moves(origin_row, origin_col, 1, 0, color, 1),
+                            );
+                            moves.extend(
+                                self.generate_linear_moves(origin_row, origin_col, 0, 1, color, 1),
+                            );
+                            moves.extend(
+                                self.generate_linear_moves(origin_row, origin_col, -1, 0, color, 1),
+                            );
+                            moves.extend(
+                                self.generate_linear_moves(origin_row, origin_col, 0, -1, color, 1),
                             );
                             moves
                         }
-                        _ => {
-                            panic!("dunno what this is");
+                        Piece {
+                            kind: Knight,
+                            color,
+                        } => {
+                            let mut moves = Vec::<ChessMove>::new();
+                            for i in (-2i32)..=2 {
+                                for j in (-2i32)..=2 {
+                                    if i == j || i == 0 || j == 0 {
+                                        continue;
+                                    }
+                                    let chess_move = self.try_move(
+                                        origin_row,
+                                        origin_col,
+                                        (i + origin_row as i32) as usize,
+                                        (j + origin_col as i32) as usize,
+                                        color,
+                                    );
+                                    match chess_move {
+                                        Some(some_move) => {
+                                            moves.push(some_move);
+                                        }
+                                        None => {}
+                                    }
+                                }
+                            }
+                            moves
+                        }
+                        Piece { kind: Pawn, color } => {
+                            let mut moves = Vec::<ChessMove>::new();
+                            //TODO: promotion and shit
+                            match color {
+                                Color::White => {
+                                    if origin_row == 1 {
+                                        match self.try_move_no_attack(
+                                            origin_row,
+                                            origin_col,
+                                            origin_row + 2,
+                                            origin_col,
+                                        ) {
+                                            Some(chess_move) => moves.push(chess_move),
+                                            None => {}
+                                        }
+                                    }
+                                    match self.try_move_no_attack(
+                                        origin_row,
+                                        origin_col,
+                                        origin_row + 1,
+                                        origin_col,
+                                    ) {
+                                        Some(chess_move) => moves.push(chess_move),
+                                        None => {}
+                                    }
+                                    match self.try_move_only_attack(
+                                        origin_row,
+                                        origin_col,
+                                        origin_row + 1,
+                                        origin_col + 1,
+                                        color,
+                                    ) {
+                                        Some(chess_move) => moves.push(chess_move),
+                                        None => {}
+                                    }
+
+                                    match self.try_move_only_attack(
+                                        origin_row,
+                                        origin_col,
+                                        origin_row + 1,
+                                        origin_col - 1,
+                                        color,
+                                    ) {
+                                        Some(chess_move) => moves.push(chess_move),
+                                        None => {}
+                                    }
+                                }
+
+                                Color::Black => {
+                                    if origin_row == 6 {
+                                        match self.try_move_no_attack(
+                                            origin_row,
+                                            origin_col,
+                                            origin_row - 2,
+                                            origin_col,
+                                        ) {
+                                            Some(chess_move) => moves.push(chess_move),
+                                            None => {}
+                                        }
+                                    }
+                                    match self.try_move_no_attack(
+                                        origin_row,
+                                        origin_col,
+                                        origin_row - 1,
+                                        origin_col,
+                                    ) {
+                                        Some(chess_move) => moves.push(chess_move),
+                                        None => {}
+                                    }
+                                    match self.try_move_only_attack(
+                                        origin_row,
+                                        origin_col,
+                                        origin_row - 1,
+                                        origin_col + 1,
+                                        color,
+                                    ) {
+                                        Some(chess_move) => moves.push(chess_move),
+                                        None => {}
+                                    }
+
+                                    match self.try_move_only_attack(
+                                        origin_row,
+                                        origin_col,
+                                        origin_row - 1,
+                                        origin_col - 1,
+                                        color,
+                                    ) {
+                                        Some(chess_move) => moves.push(chess_move),
+                                        None => {}
+                                    }
+                                }
+                            }
+                            moves
                         }
                     };
-                    return Ok(Some(res));
+                    return Ok(res);
                 }
 
-                None => return Ok(None),
+                None => return Err(BoardError::NoPieceError),
             }
         }
         fn generate_linear_moves(
@@ -114,16 +383,20 @@ pub mod chess {
             offset_x: i32,
             offset_y: i32,
             color: Color,
+            max_distance: usize,
         ) -> Vec<ChessMove> {
             let mut res: Vec<ChessMove> = Vec::new();
-            for i in 1..BOARD_SIZE {
+            for i in 1..(max_distance + 1) {
                 let potential_move = ChessMove {
                     initial_row: origin_row,
                     initial_col: origin_col,
-                    destination_row: ((origin_row as i32)+ (i as i32) * offset_x) as usize,
-                    destination_col: ((origin_row as i32)+ (i as i32) * offset_y) as usize,
+                    destination_row: ((origin_row as i32) + (i as i32) * offset_x) as usize,
+                    destination_col: ((origin_col as i32) + (i as i32) * offset_y) as usize,
                 };
-                match self.get_piece(potential_move.destination_row, potential_move.destination_col) {
+                match self.get_piece(
+                    potential_move.destination_row,
+                    potential_move.destination_col,
+                ) {
                     Ok(piece_option) => match piece_option {
                         Some(Piece {
                             kind: _,
@@ -142,9 +415,100 @@ pub mod chess {
                 }
 
                 res.push(potential_move);
-
             }
             return res;
+        }
+
+        fn try_move(
+            &self,
+            origin_row: usize,
+            origin_col: usize,
+            destination_row: usize,
+            destination_col: usize,
+            moving_color: Color,
+        ) -> Option<ChessMove> {
+            if !in_bounds(origin_row, origin_col) {
+                return None;
+            }
+            if !in_bounds(destination_row, destination_col) {
+                return None;
+            }
+            let taken_piece = self
+                .get_piece(destination_row, destination_col)
+                .unwrap_or(None);
+            match taken_piece {
+                Some(piece) => {
+                    if piece.color == moving_color {
+                        return None;
+                    }
+                }
+                None => {}
+            }
+            Some(ChessMove {
+                initial_row: origin_row,
+                initial_col: origin_col,
+                destination_row: destination_row,
+                destination_col: destination_col,
+            })
+        }
+
+        fn try_move_no_attack(
+            &self,
+            origin_row: usize,
+            origin_col: usize,
+            destination_row: usize,
+            destination_col: usize,
+        ) -> Option<ChessMove> {
+            if !in_bounds(origin_row, origin_col) {
+                return None;
+            }
+            if !in_bounds(destination_row, destination_col) {
+                return None;
+            }
+            let taken_piece = self
+                .get_piece(destination_row, destination_col)
+                .unwrap_or(None);
+            match taken_piece {
+                Some(_) => {
+                    return None;
+                }
+                None => {}
+            }
+            Some(ChessMove {
+                initial_row: origin_row,
+                initial_col: origin_col,
+                destination_row: destination_row,
+                destination_col: destination_col,
+            })
+        }
+        fn try_move_only_attack(
+            &self,
+            origin_row: usize,
+            origin_col: usize,
+            destination_row: usize,
+            destination_col: usize,
+            moving_color: Color,
+        ) -> Option<ChessMove> {
+            if !in_bounds(origin_row, origin_col) {
+                return None;
+            }
+            if !in_bounds(destination_row, destination_col) {
+                return None;
+            }
+            let taken_piece = self
+                .get_piece(destination_row, destination_col)
+                .unwrap_or(None)?;
+
+            if taken_piece.color == moving_color {
+                return None;
+            }
+
+            Some(ChessMove {
+                initial_row: origin_row,
+                initial_col: origin_col,
+                destination_row: destination_row,
+                destination_col: destination_col,
+            })
         }
     }
 
@@ -285,6 +649,4 @@ pub mod chess {
 
         Ok(res)
     }
-
-
 }
