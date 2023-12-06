@@ -4,7 +4,7 @@ pub mod chess {
 
     pub const BOARD_SIZE: usize = 8;
 
-    #[derive(Copy, Clone, Debug)]
+    #[derive(Copy, Clone, Debug, PartialEq)]
     pub struct Piece {
         pub kind: PieceKind,
         pub color: Color,
@@ -34,7 +34,7 @@ pub mod chess {
         }
     }
 
-    #[derive(Copy, Clone, Debug)]
+    #[derive(Copy, Clone, Debug, PartialEq)]
     pub enum PieceKind {
         Pawn,
         Rook,
@@ -147,7 +147,7 @@ pub mod chess {
         //of an option (which is empty if there is no piece at the selected coordinates)
         //of a vector
         //of the moves
-        fn generate_moves(
+        pub fn generate_moves(
             &self,
             origin_row: usize,
             origin_col: usize,
@@ -315,7 +315,7 @@ pub mod chess {
                                         origin_row,
                                         origin_col,
                                         origin_row + 1,
-                                        origin_col - 1,
+                                        (origin_col as i32 - 1i32) as usize, // This is ok! already handled by out of bounds check in function
                                         color,
                                     ) {
                                         Some(chess_move) => moves.push(chess_move),
@@ -359,7 +359,7 @@ pub mod chess {
                                         origin_row,
                                         origin_col,
                                         origin_row - 1,
-                                        origin_col - 1,
+                                        (origin_col as i32 - 1) as usize,
                                         color,
                                     ) {
                                         Some(chess_move) => moves.push(chess_move),
