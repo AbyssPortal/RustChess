@@ -41,10 +41,17 @@ pub mod chess_io {
                 "  A B C D E F G H      Turn: {}",
                 self.get_turn().to_string()
             );
+            match self.is_check() {
+                Some(color) => {
+                    println!("{} is checked!", color.to_string())
+                }
+                None => {}
+            }
         }
 
         //interpert moves such as "Nf3" or "e4". cares for upper/lowercase.
         pub fn interpert_move(&self, move_text: &str) -> Result<ChessMove, AlgebraicChessError> {
+            use ChessMove::*;
             //TODO: completely incompatible with special cases like castling and promoting
             let mut chars = move_text.chars();
             let first_letter = chars.next();
@@ -56,18 +63,46 @@ pub mod chess_io {
                 Some(letter) => {
                     match letter {
                         //TODO: add other pieces
-                        _ => (
-                            Piece {
-                                kind: PieceKind::Pawn,
-                                color: self.get_turn(),
-                            },
-                            digit_to_position(
-                                chars.next().ok_or(AlgebraicChessError::ExpectedMoreError)?,
-                            )
-                            .ok_or(AlgebraicChessError::UnexpectedCharError(letter))?,
-                            abc_to_position(letter)
-                                .ok_or(AlgebraicChessError::UnexpectedCharError(letter))?,
-                        ),
+                        'N' => {
+                            let first =
+                                chars.next().ok_or(AlgebraicChessError::ExpectedMoreError)?;
+                            let second =
+                                chars.next().ok_or(AlgebraicChessError::ExpectedMoreError)?;
+                            self.generate_algebraic_move_data(first, second, PieceKind::Knight)?
+                        }
+                        'R' => {
+                            let first =
+                                chars.next().ok_or(AlgebraicChessError::ExpectedMoreError)?;
+                            let second =
+                                chars.next().ok_or(AlgebraicChessError::ExpectedMoreError)?;
+                            self.generate_algebraic_move_data(first, second, PieceKind::Rook)?
+                        }
+                        'B' => {
+                            let first =
+                                chars.next().ok_or(AlgebraicChessError::ExpectedMoreError)?;
+                            let second =
+                                chars.next().ok_or(AlgebraicChessError::ExpectedMoreError)?;
+                            self.generate_algebraic_move_data(first, second, PieceKind::Bishop)?
+                        }
+                        'Q' => {
+                            let first =
+                                chars.next().ok_or(AlgebraicChessError::ExpectedMoreError)?;
+                            let second =
+                                chars.next().ok_or(AlgebraicChessError::ExpectedMoreError)?;
+                            self.generate_algebraic_move_data(first, second, PieceKind::Queen)?
+                        }
+                        'K' => {
+                            let first =
+                                chars.next().ok_or(AlgebraicChessError::ExpectedMoreError)?;
+                            let second =
+                                chars.next().ok_or(AlgebraicChessError::ExpectedMoreError)?;
+                            self.generate_algebraic_move_data(first, second, PieceKind::King)?
+                        }
+                        _ => {
+                            let second =
+                                chars.next().ok_or(AlgebraicChessError::ExpectedMoreError)?;
+                            self.generate_algebraic_move_data(letter, second, PieceKind::Pawn)?
+                        }
                     }
                 }
             };
@@ -77,12 +112,12 @@ pub mod chess_io {
                     match self.get_piece(i, j) {
                         Ok(Some(piece)) => {
                             if piece == move_data.0 {
-                                let potential_move = ChessMove {
+                                let potential_move = Normal(NormalChessMove{
                                     initial_row: i,
                                     initial_col: j,
                                     destination_row: move_data.1,
                                     destination_col: move_data.2,
-                                };
+                                });
                                 if self
                                     .generate_moves(i, j)
                                     .expect("cannot error because of for")
@@ -100,6 +135,23 @@ pub mod chess_io {
                 }
             }
             Err(AlgebraicChessError::IllegalMoveError)
+        }
+
+        fn generate_algebraic_move_data(
+            &self,
+            first: char,
+            second: char,
+            kind: PieceKind,
+        ) -> Result<(Piece, usize, usize), AlgebraicChessError> {
+            Ok((
+                Piece {
+                    kind,
+                    color: self.get_turn(),
+                },
+                digit_to_position(second)
+                    .ok_or(AlgebraicChessError::UnexpectedCharError(second))?,
+                abc_to_position(first).ok_or(AlgebraicChessError::UnexpectedCharError(first))?,
+            ))
         }
     }
 
