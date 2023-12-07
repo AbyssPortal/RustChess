@@ -44,7 +44,7 @@ pub mod chess {
         King,
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct Board {
         squares: [[Option<Piece>; BOARD_SIZE]; BOARD_SIZE],
         turn: Color,
@@ -61,7 +61,11 @@ pub mod chess {
     #[derive(Debug, PartialEq, Clone, Copy)]
 
     //TODO: turn into enum with moves such as castles and en passent
-    pub struct ChessMove {
+    pub enum ChessMove {
+        Normal(NormalChessMove),
+    }
+    #[derive(Debug, PartialEq, Clone, Copy)]
+    pub struct NormalChessMove {
         pub initial_row: usize,
         pub initial_col: usize,
         pub destination_row: usize,
@@ -93,54 +97,70 @@ pub mod chess {
         }
 
         pub fn make_legal_move(&mut self, chess_move: ChessMove) -> Result<(), BoardError> {
-            let piece_option = self.get_piece(chess_move.initial_row, chess_move.initial_col)?;
-            match piece_option {
-                Some(Piece { kind: _, color }) => {
-                    if color != self.turn {
+            match chess_move {
+                ChessMove::Normal(normal_move) => {
+                    let piece_option =
+                        self.get_piece(normal_move.initial_row, normal_move.initial_col)?;
+                    match piece_option {
+                        Some(Piece { kind: _, color }) => {
+                            if color != self.turn {
+                                return Err(BoardError::IllegalMoveError);
+                            }
+                        }
+                        None => {
+                            return Err(BoardError::NoPieceError);
+                        }
+                    }
+                    let old_board = self.clone();
+
+                    let moves =
+                        self.generate_moves(normal_move.initial_row, normal_move.initial_col)?;
+                    if moves.contains(&chess_move) {
+                        self.make_move(chess_move);
+                        if self.is_check_specific_color(self.turn.opposite()) {
+                            *self = old_board;
+                            return Err(BoardError::IllegalMoveError);
+                        }
+                        return Ok(());
+                    } else {
                         return Err(BoardError::IllegalMoveError);
                     }
                 }
-                None => {
-                    return Err(BoardError::NoPieceError);
-                }
-            }
-            let moves = self.generate_moves(chess_move.initial_row, chess_move.initial_col)?;
-            if moves.contains(&chess_move) {
-                self.make_move(chess_move);
-                return Ok(());
-            } else {
-                return Err(BoardError::IllegalMoveError);
             }
         }
 
         fn make_move(&mut self, chess_move: ChessMove) {
-            self.squares[chess_move.destination_row][chess_move.destination_col] =
-                self.squares[chess_move.initial_row][chess_move.initial_col];
-            self.squares[chess_move.initial_row][chess_move.initial_col] = None;
-            //if we're in the white row and moved the starting locations
-            //TODO: chess960 or smth
+            match chess_move {
+                ChessMove::Normal(normal_move) => {
+                    self.squares[normal_move.destination_row][normal_move.destination_col] =
+                        self.squares[normal_move.initial_row][normal_move.initial_col];
+                    self.squares[normal_move.initial_row][normal_move.initial_col] = None;
+                    //if we're in the white row and moved the starting locations
+                    //TODO: chess960 or smth
 
-            if chess_move.initial_row == 0
-                && (chess_move.initial_col == 4 || chess_move.initial_col == 0)
-            {
-                self.castle_rights.white.queen = false;
+                    if normal_move.initial_row == 0
+                        && (normal_move.initial_col == 4 || normal_move.initial_col == 0)
+                    {
+                        self.castle_rights.white.queen = false;
+                    }
+                    if normal_move.initial_row == 0
+                        && (normal_move.initial_col == 4 || normal_move.initial_col == 7)
+                    {
+                        self.castle_rights.white.king = false;
+                    }
+                    if normal_move.initial_row == 7
+                        && (normal_move.initial_col == 4 || normal_move.initial_col == 0)
+                    {
+                        self.castle_rights.black.queen = false;
+                    }
+                    if normal_move.initial_row == 7
+                        && (normal_move.initial_col == 4 || normal_move.initial_col == 7)
+                    {
+                        self.castle_rights.black.king = false;
+                    }
+                    self.turn = self.turn.opposite();
+                }
             }
-            if chess_move.initial_row == 0
-                && (chess_move.initial_col == 4 || chess_move.initial_col == 7)
-            {
-                self.castle_rights.white.king = false;
-            }
-            if chess_move.initial_row == 7
-                && (chess_move.initial_col == 4 || chess_move.initial_col == 0)
-            {
-                self.castle_rights.black.queen = false;
-            }
-            if chess_move.initial_row == 7
-                && (chess_move.initial_col == 4 || chess_move.initial_col == 7)
-            {
-                self.castle_rights.black.king = false;
-            }
-            self.turn = self.turn.opposite();
         }
 
         //returns a result (which errors in case of an error)
@@ -255,7 +275,7 @@ pub mod chess {
                             let mut moves = Vec::<ChessMove>::new();
                             for i in (-2i32)..=2 {
                                 for j in (-2i32)..=2 {
-                                    if i == j || i == 0 || j == 0 {
+                                    if i.abs() == j.abs() || i == 0 || j == 0 {
                                         continue;
                                     }
                                     let chess_move = self.try_move(
@@ -387,7 +407,7 @@ pub mod chess {
         ) -> Vec<ChessMove> {
             let mut res: Vec<ChessMove> = Vec::new();
             for i in 1..(max_distance + 1) {
-                let potential_move = ChessMove {
+                let potential_move = NormalChessMove {
                     initial_row: origin_row,
                     initial_col: origin_col,
                     destination_row: ((origin_row as i32) + (i as i32) * offset_x) as usize,
@@ -403,7 +423,7 @@ pub mod chess {
                             color: other_color,
                         }) => {
                             if other_color != color {
-                                res.push(potential_move)
+                                res.push(ChessMove::Normal(potential_move))
                             }
                             break;
                         }
@@ -414,7 +434,7 @@ pub mod chess {
                     }
                 }
 
-                res.push(potential_move);
+                res.push(ChessMove::Normal(potential_move));
             }
             return res;
         }
@@ -444,12 +464,12 @@ pub mod chess {
                 }
                 None => {}
             }
-            Some(ChessMove {
+            Some(ChessMove::Normal( NormalChessMove{
                 initial_row: origin_row,
                 initial_col: origin_col,
                 destination_row: destination_row,
                 destination_col: destination_col,
-            })
+            }))
         }
 
         fn try_move_no_attack(
@@ -474,13 +494,14 @@ pub mod chess {
                 }
                 None => {}
             }
-            Some(ChessMove {
+            Some(ChessMove::Normal( NormalChessMove{
                 initial_row: origin_row,
                 initial_col: origin_col,
                 destination_row: destination_row,
                 destination_col: destination_col,
-            })
+            }))
         }
+        
         fn try_move_only_attack(
             &self,
             origin_row: usize,
@@ -488,6 +509,7 @@ pub mod chess {
             destination_row: usize,
             destination_col: usize,
             moving_color: Color,
+      
         ) -> Option<ChessMove> {
             if !in_bounds(origin_row, origin_col) {
                 return None;
@@ -503,21 +525,93 @@ pub mod chess {
                 return None;
             }
 
-            Some(ChessMove {
+            Some(ChessMove::Normal( NormalChessMove{
                 initial_row: origin_row,
                 initial_col: origin_col,
                 destination_row: destination_row,
                 destination_col: destination_col,
-            })
+            }))
+        }
+    
+
+        //returns the color of the checkmated player
+        pub fn is_checkmate(&self) -> Option<Color> {
+            let mut hypothetical_board = self.clone();
+            for i in 0..BOARD_SIZE {
+                for j in 0..BOARD_SIZE {
+                    match hypothetical_board.generate_moves(i, j) {
+                        Ok(moves) => {
+                            for chess_move in moves {
+                                if hypothetical_board.make_legal_move(chess_move).is_ok() {
+                                    return None;
+                                }
+                            }
+                        }
+                        Err(_) => {
+
+                        }
+                    }
+                }
+            }
+            Some(self.turn)
+        }
+
+        //whether somebody is in check, if they are returns the color of the *checked* player.
+        //(this will always be the color of the person who's turn it is because of how chess works).
+        pub fn is_check(&self) -> Option<Color> {
+            let turn_color = self.turn;
+            match self.is_check_specific_color(turn_color) {
+                true => Some(turn_color),
+                false => None,
+            }
+        }
+
+        //returns if color is checked
+        fn is_check_specific_color(&self, color: Color) -> bool {
+            for i in 0..BOARD_SIZE {
+                for j in 0..BOARD_SIZE {
+                    match self.squares[i][j] {
+                        Some(piece) => {
+                            if piece.color == color {
+                                continue;
+                            }
+                        }
+                        None => {continue;}
+                    }
+                    match self.generate_moves(i, j) {
+                        Ok(moves) => {
+                            for chess_move in moves {
+                                match chess_move {
+                                    ChessMove::Normal(normal_move) => {
+                                        match self.squares[normal_move.destination_row][ normal_move.destination_col] {
+                                        Some(Piece{kind: PieceKind::King, color }) => {
+                                            if color == color {
+                                            return true;
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        //unreachable
+                        Err(BoardError::NoPieceError) => {}
+                        Err(err) => {panic!("{:?} in is_check", err)}
+                    }
+                }
+            }
+            false
         }
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     struct CastleRights {
         white: OneSidedCastleRights,
         black: OneSidedCastleRights,
     }
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
 
     struct OneSidedCastleRights {
         king: bool,
