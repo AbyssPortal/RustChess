@@ -59,10 +59,23 @@ pub mod chess {
     }
 
     #[derive(Debug, PartialEq, Clone, Copy)]
+    pub enum CastleSide {
+        KingSide,
+        QueenSide,
+    }
+
+    #[derive(Debug, PartialEq, Clone, Copy)]
+    pub struct Castles {
+        pub color: Color,
+        pub side: CastleSide,
+    }
+
+    #[derive(Debug, PartialEq, Clone, Copy)]
 
     //TODO: turn into enum with moves such as castles and en passent
     pub enum ChessMove {
         Normal(NormalChessMove),
+        Castling(Castles),
     }
     #[derive(Debug, PartialEq, Clone, Copy)]
     pub struct NormalChessMove {
@@ -111,22 +124,46 @@ pub mod chess {
                             return Err(BoardError::NoPieceError);
                         }
                     }
-                    let old_board = self.clone();
-
                     let moves =
                         self.generate_moves(normal_move.initial_row, normal_move.initial_col)?;
-                    if moves.contains(&chess_move) {
-                        self.make_move(chess_move);
-                        if self.is_check_specific_color(self.turn.opposite()) {
-                            *self = old_board;
-                            return Err(BoardError::IllegalMoveError);
-                        }
-                        return Ok(());
-                    } else {
+                    if !moves.contains(&chess_move) {
                         return Err(BoardError::IllegalMoveError);
                     }
                 }
+                ChessMove::Castling(castle_move) => {
+                    let row = match castle_move.color {
+                        Color::White => 0,
+                        Color::Black => BOARD_SIZE - 1,
+                    };
+                    match castle_move.side {
+                        CastleSide::QueenSide => {
+                            if self.squares[row][1].is_some()
+                                || self.squares[row][2].is_some()
+                                || self.squares[row][3].is_some()
+                                || !self.castle_rights.at(self.turn, CastleSide::QueenSide)
+                            {
+                                return Err(BoardError::IllegalMoveError);
+                            }
+                        }
+                        CastleSide::KingSide => {
+                            if self.squares[row][5].is_some()
+                                || self.squares[row][6].is_some()
+                                || !self.castle_rights.at(self.turn, CastleSide::KingSide)
+                            {
+                                return Err(BoardError::IllegalMoveError);
+                            }
+                        }
+                    }
+                }
             }
+            let old_board = self.clone();
+
+            self.make_move(chess_move);
+            if self.is_check_specific_color(self.turn.opposite()) {
+                *self = old_board;
+                return Err(BoardError::IllegalMoveError);
+            }
+            return Ok(());
         }
 
         fn make_move(&mut self, chess_move: ChessMove) {
@@ -158,9 +195,42 @@ pub mod chess {
                     {
                         self.castle_rights.black.king = false;
                     }
-                    self.turn = self.turn.opposite();
+                }
+                ChessMove::Castling(castle_move) => {
+                    let row = match castle_move.color {
+                        Color::White => 0,
+                        Color::Black => BOARD_SIZE - 1,
+                    };
+                    match castle_move.side {
+                        //TODO: it's illegal to castle through check
+                        CastleSide::QueenSide => {
+                            self.squares[row][0] = None;
+                            self.squares[row][2] = Some(Piece {
+                                kind: PieceKind::King,
+                                color: castle_move.color,
+                            });
+                            self.squares[row][3] = Some(Piece {
+                                kind: PieceKind::Rook,
+                                color: castle_move.color,
+                            });
+                            self.squares[row][4] = None;
+                        }
+                        CastleSide::KingSide => {
+                            self.squares[row][7] = None;
+                            self.squares[row][6] = Some(Piece {
+                                kind: PieceKind::King,
+                                color: castle_move.color,
+                            });
+                            self.squares[row][5] = Some(Piece {
+                                kind: PieceKind::Rook,
+                                color: castle_move.color,
+                            });
+                            self.squares[row][4] = None;
+                        }
+                    }
                 }
             }
+            self.turn = self.turn.opposite();
         }
 
         //returns a result (which errors in case of an error)
@@ -464,7 +534,7 @@ pub mod chess {
                 }
                 None => {}
             }
-            Some(ChessMove::Normal( NormalChessMove{
+            Some(ChessMove::Normal(NormalChessMove {
                 initial_row: origin_row,
                 initial_col: origin_col,
                 destination_row: destination_row,
@@ -494,14 +564,14 @@ pub mod chess {
                 }
                 None => {}
             }
-            Some(ChessMove::Normal( NormalChessMove{
+            Some(ChessMove::Normal(NormalChessMove {
                 initial_row: origin_row,
                 initial_col: origin_col,
                 destination_row: destination_row,
                 destination_col: destination_col,
             }))
         }
-        
+
         fn try_move_only_attack(
             &self,
             origin_row: usize,
@@ -509,7 +579,6 @@ pub mod chess {
             destination_row: usize,
             destination_col: usize,
             moving_color: Color,
-      
         ) -> Option<ChessMove> {
             if !in_bounds(origin_row, origin_col) {
                 return None;
@@ -525,14 +594,13 @@ pub mod chess {
                 return None;
             }
 
-            Some(ChessMove::Normal( NormalChessMove{
+            Some(ChessMove::Normal(NormalChessMove {
                 initial_row: origin_row,
                 initial_col: origin_col,
                 destination_row: destination_row,
                 destination_col: destination_col,
             }))
         }
-    
 
         //returns the color of the checkmated player
         pub fn is_checkmate(&self) -> Option<Color> {
@@ -547,9 +615,7 @@ pub mod chess {
                                 }
                             }
                         }
-                        Err(_) => {
-
-                        }
+                        Err(_) => {}
                     }
                 }
             }
@@ -576,21 +642,28 @@ pub mod chess {
                                 continue;
                             }
                         }
-                        None => {continue;}
+                        None => {
+                            continue;
+                        }
                     }
                     match self.generate_moves(i, j) {
                         Ok(moves) => {
                             for chess_move in moves {
                                 match chess_move {
                                     ChessMove::Normal(normal_move) => {
-                                        match self.squares[normal_move.destination_row][ normal_move.destination_col] {
-                                        Some(Piece{kind: PieceKind::King, color }) => {
-                                            if color == color {
-                                            return true;
+                                        match self.squares[normal_move.destination_row]
+                                            [normal_move.destination_col]
+                                        {
+                                            Some(Piece {
+                                                kind: PieceKind::King,
+                                                color,
+                                            }) => {
+                                                if color == color {
+                                                    return true;
+                                                }
                                             }
+                                            _ => {}
                                         }
-                                        _ => {}
-                                    }
                                     }
                                     _ => {}
                                 }
@@ -598,7 +671,9 @@ pub mod chess {
                         }
                         //unreachable
                         Err(BoardError::NoPieceError) => {}
-                        Err(err) => {panic!("{:?} in is_check", err)}
+                        Err(err) => {
+                            panic!("{:?} in is_check", err)
+                        }
                     }
                 }
             }
@@ -611,6 +686,20 @@ pub mod chess {
         white: OneSidedCastleRights,
         black: OneSidedCastleRights,
     }
+
+    impl CastleRights {
+        fn at(&self, color: Color, side: CastleSide) -> &bool {
+            use CastleSide::*;
+            use Color::*;
+            match (color, side) {
+                (White, KingSide) => &self.white.king,
+                (White, QueenSide) => &self.white.queen,
+                (Black, KingSide) => &self.black.king,
+                (Black, QueenSide) => &self.black.queen,
+            }
+        }
+    }
+
     #[derive(Debug, Clone)]
 
     struct OneSidedCastleRights {

@@ -53,6 +53,12 @@ pub mod chess_io {
         pub fn interpert_move(&self, move_text: &str) -> Result<ChessMove, AlgebraicChessError> {
             use ChessMove::*;
             //TODO: completely incompatible with special cases like castling and promoting
+            if move_text.to_uppercase() == "O-O" {
+                return Ok(Castling(Castles{color: self.get_turn(), side: CastleSide::KingSide}))
+            } 
+            else if move_text.to_uppercase() == "O-O-O" {
+                return Ok(Castling(Castles{color: self.get_turn(), side: CastleSide::QueenSide}))
+            } 
             let mut chars = move_text.chars();
             let first_letter = chars.next();
 
