@@ -49,6 +49,8 @@ pub mod chess {
         squares: [[Option<Piece>; BOARD_SIZE]; BOARD_SIZE],
         turn: Color,
         castle_rights: CastleRights,
+        pub is_check: Option<Color>,
+        pub is_checkmate: Option<Color>,
     }
 
     #[derive(Debug)]
@@ -110,6 +112,14 @@ pub mod chess {
         }
 
         pub fn make_legal_move(&mut self, chess_move: ChessMove) -> Result<(), BoardError> {
+            let res = self.make_legal_move_inner(chess_move);
+            self.is_check = self.test_if_check();
+            self.is_checkmate = self.test_if_checkmate();
+            return res;
+        }
+
+        //does not update check or checkmate flags.
+        fn make_legal_move_inner(&mut self, chess_move: ChessMove) -> Result<(), BoardError> {
             match chess_move {
                 ChessMove::Normal(normal_move) => {
                     let piece_option =
@@ -231,6 +241,7 @@ pub mod chess {
                 }
             }
             self.turn = self.turn.opposite();
+
         }
 
         //returns a result (which errors in case of an error)
@@ -428,7 +439,7 @@ pub mod chess {
                                     match self.try_move_no_attack(
                                         origin_row,
                                         origin_col,
-                                        origin_row - 1,
+                                        (origin_row as i32 - 1i32) as usize, // This is ok! already handled by out of bounds check in function
                                         origin_col,
                                     ) {
                                         Some(chess_move) => moves.push(chess_move),
@@ -437,7 +448,7 @@ pub mod chess {
                                     match self.try_move_only_attack(
                                         origin_row,
                                         origin_col,
-                                        origin_row - 1,
+                                        (origin_row as i32 - 1i32) as usize, // This is ok! already handled by out of bounds check in function
                                         origin_col + 1,
                                         color,
                                     ) {
@@ -448,7 +459,7 @@ pub mod chess {
                                     match self.try_move_only_attack(
                                         origin_row,
                                         origin_col,
-                                        origin_row - 1,
+                                        (origin_row as i32 - 1i32) as usize, // This is ok! already handled by out of bounds check in function
                                         (origin_col as i32 - 1) as usize,
                                         color,
                                     ) {
@@ -603,14 +614,14 @@ pub mod chess {
         }
 
         //returns the color of the checkmated player
-        pub fn is_checkmate(&self) -> Option<Color> {
+        fn test_if_checkmate(&self) -> Option<Color> {
             let mut hypothetical_board = self.clone();
             for i in 0..BOARD_SIZE {
                 for j in 0..BOARD_SIZE {
                     match hypothetical_board.generate_moves(i, j) {
                         Ok(moves) => {
                             for chess_move in moves {
-                                if hypothetical_board.make_legal_move(chess_move).is_ok() {
+                                if hypothetical_board.make_legal_move_inner(chess_move).is_ok() {
                                     return None;
                                 }
                             }
@@ -624,7 +635,7 @@ pub mod chess {
 
         //whether somebody is in check, if they are returns the color of the *checked* player.
         //(this will always be the color of the person who's turn it is because of how chess works).
-        pub fn is_check(&self) -> Option<Color> {
+        fn test_if_check(&self) -> Option<Color> {
             let turn_color = self.turn;
             match self.is_check_specific_color(turn_color) {
                 true => Some(turn_color),
@@ -771,6 +782,8 @@ pub mod chess {
                     queen: meta_data.contains("q"),
                 }),
             },
+            is_check: None,
+            is_checkmate: None
         };
 
         Ok(res)

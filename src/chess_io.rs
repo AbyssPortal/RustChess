@@ -41,11 +41,14 @@ pub mod chess_io {
                 "  A B C D E F G H      Turn: {}",
                 self.get_turn().to_string()
             );
-            match self.is_check() {
-                Some(color) => {
+            match (self.is_check, self.is_checkmate) {
+                (_, Some(color)) => {
+                    println!("{} is checkmated!", color.to_string())
+                }
+                (Some(color), None) => {
                     println!("{} is checked!", color.to_string())
                 }
-                None => {}
+                (None, None) => {}
             }
         }
 
