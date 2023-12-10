@@ -33,10 +33,10 @@ pub mod chess_io {
                         }
                         None => {
                             print!(
-                                "{}",
+                                "{} ",
                                 match (i + j) % 2 {
-                                    1 => '🔲',
-                                    0 => '⬛',
+                                    1 => '■',//'🔲',
+                                    0 => '□',//'⬛',
                                     _ => {
                                         panic!("unreachable");
                                     }
@@ -83,70 +83,73 @@ pub mod chess_io {
             //these have no meanings for the game  ^^^
             let first_letter = chars.next();
 
-            //this code sucks ass
-            let mut required_promotion = None;
-
-            let move_data = match first_letter {
+            let (move_data, required_promotion) = match first_letter {
                 None => {
                     return Err(AlgebraicChessError::ExpectedMoreError);
                 }
                 Some(letter) => {
                     match letter {
                         //TODO: add other pieces
-                        'N' | 'R' | 'B' | 'Q' | 'K' => {
-                            let kind = match letter {
-                                'N' => PieceKind::Knight,
-                                'R' => PieceKind::Rook,
-                                'B' => PieceKind::Bishop,
-                                'Q' => PieceKind::Queen,
-                                'K' => PieceKind::King,
-                                _ => {
-                                    panic!("inaccesible")
-                                }
-                            };
-                            let first =
-                                chars.next().ok_or(AlgebraicChessError::ExpectedMoreError)?;
-                            let second =
-                                chars.next().ok_or(AlgebraicChessError::ExpectedMoreError)?;
-                            self.generate_algebraic_move_data_from_squares(
-                                first,
-                                second,
-                                chars.next(),
-                                chars.next(),
-                                kind,
-                            )?
-                        }
-                        _ => {
-                            let second =
-                                chars.next().ok_or(AlgebraicChessError::ExpectedMoreError)?;
-                            let move_data = match second.is_ascii_alphabetic() {
-                                true => self.generate_algebraic_move_data_from_squares(
-                                    second,
-                                    chars.next().ok_or(AlgebraicChessError::ExpectedMoreError)?,
-                                    None,
-                                    None,
-                                    PieceKind::Pawn,
-                                )?,
-                                false => self.generate_algebraic_move_data_from_squares(
-                                    letter,
+                        'N' | 'R' | 'B' | 'Q' | 'K' => (
+                            {
+                                let kind = match letter {
+                                    'N' => PieceKind::Knight,
+                                    'R' => PieceKind::Rook,
+                                    'B' => PieceKind::Bishop,
+                                    'Q' => PieceKind::Queen,
+                                    'K' => PieceKind::King,
+                                    _ => {
+                                        panic!("inaccesible")
+                                    }
+                                };
+                                let first =
+                                    chars.next().ok_or(AlgebraicChessError::ExpectedMoreError)?;
+                                let second =
+                                    chars.next().ok_or(AlgebraicChessError::ExpectedMoreError)?;
+                                self.generate_algebraic_move_data_from_squares(
+                                    first,
                                     second,
                                     chars.next(),
                                     chars.next(),
-                                    PieceKind::Pawn,
-                                )?,
-                            };
-                            let mut reverse_iter = move_text
-                                .chars()
-                                .rev()
-                                .filter(|&c| c != 'x' && c != '+' && c != '#');
-                            match (reverse_iter.next(), reverse_iter.next()) {
-                                (Some(letter), Some('=')) => {
-                                    required_promotion = kind_from_letter(letter)
+                                    kind,
+                                )?
+                            },
+                            None,
+                        ),
+                        _ => (
+                            {
+                                let second =
+                                    chars.next().ok_or(AlgebraicChessError::ExpectedMoreError)?;
+                                match second.is_ascii_alphabetic() {
+                                    true => self.generate_algebraic_move_data_from_squares(
+                                        second,
+                                        chars
+                                            .next()
+                                            .ok_or(AlgebraicChessError::ExpectedMoreError)?,
+                                        None,
+                                        None,
+                                        PieceKind::Pawn,
+                                    )?,
+                                    false => self.generate_algebraic_move_data_from_squares(
+                                        letter,
+                                        second,
+                                        chars.next(),
+                                        chars.next(),
+                                        PieceKind::Pawn,
+                                    )?,
                                 }
-                                (_, _) => {}
-                            }
-                            move_data
-                        }
+                            },
+                            {
+                                let mut reverse_iter = move_text
+                                    .chars()
+                                    .rev()
+                                    .filter(|&c| c != 'x' && c != '+' && c != '#');
+                                match (reverse_iter.next(), reverse_iter.next()) {
+                                    (Some(letter), Some('=')) => kind_from_letter(letter),
+                                    (_, _) => None,
+                                }
+                            },
+                        ),
                     }
                 }
             };
