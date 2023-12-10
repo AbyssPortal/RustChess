@@ -8,6 +8,7 @@ fn main() {
     let mut def_board =
         make_board_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR/ w KQkq - 0 1").unwrap();
 
+
     while def_board.is_checkmate.is_none() {
         def_board.print_board();
         let move_string: String = read!();

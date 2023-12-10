@@ -44,6 +44,19 @@ pub mod chess {
         King,
     }
 
+    pub fn kind_from_letter(letter: char) -> Option<PieceKind> {
+        use PieceKind::*;
+        match letter.to_ascii_lowercase() {
+            'k' => Some(King),
+            'n' => Some(Knight),
+            'b' => Some(Bishop),
+            'q' => Some(Queen),
+            'p' => Some(Pawn),
+            'r' => Some(Rook),
+            _ => None,
+        }
+    }
+
     #[derive(Debug, Clone)]
     pub struct Board {
         squares: [[Option<Piece>; BOARD_SIZE]; BOARD_SIZE],
@@ -78,6 +91,7 @@ pub mod chess {
     pub enum ChessMove {
         Normal(NormalChessMove),
         Castling(Castles),
+        Promotion(NormalChessMove, PieceKind),
     }
     #[derive(Debug, PartialEq, Clone, Copy)]
     pub struct NormalChessMove {
@@ -99,6 +113,33 @@ pub mod chess {
         println!("{:?}", res.unwrap().len());
     }
 
+    struct PromotionIterator<I>
+    where
+        I: Iterator<Item = char>,
+    {
+        base_move: NormalChessMove,
+        pieces_iterator: I,
+    }
+
+    impl<I> Iterator for PromotionIterator<I>
+    where
+        I: Iterator<Item = char>,
+    {
+        type Item = ChessMove;
+        fn next(&mut self) -> Option<ChessMove> {
+            match kind_from_letter(self.pieces_iterator.next()?)? {
+            PieceKind::Pawn => 
+            Some(ChessMove::Normal(self.base_move)),
+            other => {
+                Some(ChessMove::Promotion(
+                    self.base_move,
+                    other,
+                ))
+            }
+        }
+        }
+    }
+
     impl Board {
         pub fn get_piece(&self, row: usize, col: usize) -> Result<Option<Piece>, BoardError> {
             if !in_bounds(row, col) {
@@ -111,17 +152,22 @@ pub mod chess {
             return self.turn;
         }
 
+        //the function used to make moves from outside the module.
         pub fn make_legal_move(&mut self, chess_move: ChessMove) -> Result<(), BoardError> {
             let res = self.make_legal_move_inner(chess_move);
+            self.update_flags();
+            return res;
+        }
+
+        fn update_flags(&mut self) {
             self.is_check = self.test_if_check();
             self.is_checkmate = self.test_if_checkmate();
-            return res;
         }
 
         //does not update check or checkmate flags.
         fn make_legal_move_inner(&mut self, chess_move: ChessMove) -> Result<(), BoardError> {
             match chess_move {
-                ChessMove::Normal(normal_move) => {
+                ChessMove::Normal(normal_move) | ChessMove::Promotion(normal_move, _) => {
                     let piece_option =
                         self.get_piece(normal_move.initial_row, normal_move.initial_col)?;
                     match piece_option {
@@ -151,6 +197,8 @@ pub mod chess {
                                 || self.squares[row][2].is_some()
                                 || self.squares[row][3].is_some()
                                 || !self.castle_rights.at(self.turn, CastleSide::QueenSide)
+                                || self.is_check.is_some()
+                                || self.is_square_attacked(row, 3, self.turn)
                             {
                                 return Err(BoardError::IllegalMoveError);
                             }
@@ -159,6 +207,8 @@ pub mod chess {
                             if self.squares[row][5].is_some()
                                 || self.squares[row][6].is_some()
                                 || !self.castle_rights.at(self.turn, CastleSide::KingSide)
+                                || self.is_check.is_some()
+                                || self.is_square_attacked(row, 5, self.turn)
                             {
                                 return Err(BoardError::IllegalMoveError);
                             }
@@ -168,7 +218,7 @@ pub mod chess {
             }
             let old_board = self.clone();
 
-            self.make_move(chess_move);
+            self.make_move(chess_move)?;
             if self.is_check_specific_color(self.turn.opposite()) {
                 *self = old_board;
                 return Err(BoardError::IllegalMoveError);
@@ -176,7 +226,7 @@ pub mod chess {
             return Ok(());
         }
 
-        fn make_move(&mut self, chess_move: ChessMove) {
+        fn make_move(&mut self, chess_move: ChessMove) -> Result<(), BoardError> {
             match chess_move {
                 ChessMove::Normal(normal_move) => {
                     self.squares[normal_move.destination_row][normal_move.destination_col] =
@@ -239,9 +289,19 @@ pub mod chess {
                         }
                     }
                 }
+                ChessMove::Promotion(normal_move, kind) => {
+                    self.squares[normal_move.destination_row][normal_move.destination_col] =
+                        Some(Piece {
+                            kind: kind,
+                            color: self.squares[normal_move.initial_row][normal_move.initial_col]
+                                .ok_or(BoardError::NoPieceError)?
+                                .color,
+                        });
+                    self.squares[normal_move.initial_row][normal_move.initial_col] = None;
+                }
             }
             self.turn = self.turn.opposite();
-
+            Ok(())
         }
 
         //returns a result (which errors in case of an error)
@@ -253,6 +313,7 @@ pub mod chess {
             origin_row: usize,
             origin_col: usize,
         ) -> Result<Vec<ChessMove>, BoardError> {
+            use ChessMove::*;
             use PieceKind::*;
             let piece_option = self.get_piece(origin_row, origin_col)?;
             match piece_option {
@@ -368,7 +429,7 @@ pub mod chess {
                                     );
                                     match chess_move {
                                         Some(some_move) => {
-                                            moves.push(some_move);
+                                            moves.push(Normal(some_move));
                                         }
                                         None => {}
                                     }
@@ -378,7 +439,6 @@ pub mod chess {
                         }
                         Piece { kind: Pawn, color } => {
                             let mut moves = Vec::<ChessMove>::new();
-                            //TODO: promotion and shit
                             match color {
                                 Color::White => {
                                     if origin_row == 1 {
@@ -388,7 +448,9 @@ pub mod chess {
                                             origin_row + 2,
                                             origin_col,
                                         ) {
-                                            Some(chess_move) => moves.push(chess_move),
+                                            Some(chess_move) => moves.extend(
+                                                self.turn_move_to_promotion(chess_move, color),
+                                            ),
                                             None => {}
                                         }
                                     }
@@ -398,7 +460,8 @@ pub mod chess {
                                         origin_row + 1,
                                         origin_col,
                                     ) {
-                                        Some(chess_move) => moves.push(chess_move),
+                                        Some(chess_move) => moves
+                                            .extend(self.turn_move_to_promotion(chess_move, color)),
                                         None => {}
                                     }
                                     match self.try_move_only_attack(
@@ -408,7 +471,8 @@ pub mod chess {
                                         origin_col + 1,
                                         color,
                                     ) {
-                                        Some(chess_move) => moves.push(chess_move),
+                                        Some(chess_move) => moves
+                                            .extend(self.turn_move_to_promotion(chess_move, color)),
                                         None => {}
                                     }
 
@@ -419,7 +483,8 @@ pub mod chess {
                                         (origin_col as i32 - 1i32) as usize, // This is ok! already handled by out of bounds check in function
                                         color,
                                     ) {
-                                        Some(chess_move) => moves.push(chess_move),
+                                        Some(chess_move) => moves
+                                            .extend(self.turn_move_to_promotion(chess_move, color)),
                                         None => {}
                                     }
                                 }
@@ -432,7 +497,9 @@ pub mod chess {
                                             origin_row - 2,
                                             origin_col,
                                         ) {
-                                            Some(chess_move) => moves.push(chess_move),
+                                            Some(chess_move) => moves.extend(
+                                                self.turn_move_to_promotion(chess_move, color),
+                                            ),
                                             None => {}
                                         }
                                     }
@@ -442,7 +509,8 @@ pub mod chess {
                                         (origin_row as i32 - 1i32) as usize, // This is ok! already handled by out of bounds check in function
                                         origin_col,
                                     ) {
-                                        Some(chess_move) => moves.push(chess_move),
+                                        Some(chess_move) => moves
+                                            .extend(self.turn_move_to_promotion(chess_move, color)),
                                         None => {}
                                     }
                                     match self.try_move_only_attack(
@@ -452,7 +520,8 @@ pub mod chess {
                                         origin_col + 1,
                                         color,
                                     ) {
-                                        Some(chess_move) => moves.push(chess_move),
+                                        Some(chess_move) => moves
+                                            .extend(self.turn_move_to_promotion(chess_move, color)),
                                         None => {}
                                     }
 
@@ -463,7 +532,8 @@ pub mod chess {
                                         (origin_col as i32 - 1) as usize,
                                         color,
                                     ) {
-                                        Some(chess_move) => moves.push(chess_move),
+                                        Some(chess_move) => moves
+                                            .extend(self.turn_move_to_promotion(chess_move, color)),
                                         None => {}
                                     }
                                 }
@@ -527,7 +597,7 @@ pub mod chess {
             destination_row: usize,
             destination_col: usize,
             moving_color: Color,
-        ) -> Option<ChessMove> {
+        ) -> Option<NormalChessMove> {
             if !in_bounds(origin_row, origin_col) {
                 return None;
             }
@@ -545,12 +615,12 @@ pub mod chess {
                 }
                 None => {}
             }
-            Some(ChessMove::Normal(NormalChessMove {
+            Some(NormalChessMove {
                 initial_row: origin_row,
                 initial_col: origin_col,
                 destination_row: destination_row,
                 destination_col: destination_col,
-            }))
+            })
         }
 
         fn try_move_no_attack(
@@ -559,7 +629,7 @@ pub mod chess {
             origin_col: usize,
             destination_row: usize,
             destination_col: usize,
-        ) -> Option<ChessMove> {
+        ) -> Option<NormalChessMove> {
             if !in_bounds(origin_row, origin_col) {
                 return None;
             }
@@ -575,12 +645,12 @@ pub mod chess {
                 }
                 None => {}
             }
-            Some(ChessMove::Normal(NormalChessMove {
+            Some(NormalChessMove {
                 initial_row: origin_row,
                 initial_col: origin_col,
                 destination_row: destination_row,
                 destination_col: destination_col,
-            }))
+            })
         }
 
         fn try_move_only_attack(
@@ -590,7 +660,7 @@ pub mod chess {
             destination_row: usize,
             destination_col: usize,
             moving_color: Color,
-        ) -> Option<ChessMove> {
+        ) -> Option<NormalChessMove> {
             if !in_bounds(origin_row, origin_col) {
                 return None;
             }
@@ -605,12 +675,35 @@ pub mod chess {
                 return None;
             }
 
-            Some(ChessMove::Normal(NormalChessMove {
+            Some(NormalChessMove {
                 initial_row: origin_row,
                 initial_col: origin_col,
                 destination_row: destination_row,
                 destination_col: destination_col,
-            }))
+            })
+        }
+
+        //color: the color of the moving piece. only used in generate_moves for pawn promotion
+        fn turn_move_to_promotion(
+            &self,
+            chess_move: NormalChessMove,
+            color: Color,
+        ) -> PromotionIterator<std::str::Chars<'_>> {
+            let promotion_row = match color {
+                Color::White => 7,
+                Color::Black => 0,
+            };
+            if chess_move.destination_row == promotion_row {
+                PromotionIterator {
+                    base_move: chess_move,
+                    pieces_iterator: "rnbq".chars(),
+                }
+            } else {
+                PromotionIterator {
+                    base_move: chess_move,
+                    pieces_iterator: "p".chars(),
+                }
+            }
         }
 
         //returns the color of the checkmated player
@@ -684,6 +777,40 @@ pub mod chess {
                         Err(BoardError::NoPieceError) => {}
                         Err(err) => {
                             panic!("{:?} in is_check", err)
+                        }
+                    }
+                }
+            }
+            false
+        }
+
+        //used for castling test. the given color is the one that may be attacked, not the attacker
+        fn is_square_attacked(&self, row: usize, col: usize, color: Color) -> bool {
+            for i in 0..BOARD_SIZE {
+                for j in 0..BOARD_SIZE {
+                    match self.squares[i][j] {
+                        Some(Piece {
+                            kind: _,
+                            color: piece_color,
+                        }) => {
+                            if color == piece_color {
+                                continue;
+                            }
+                            for chess_move in self.generate_moves(i, j).expect("bounds check") {
+                                match chess_move {
+                                    ChessMove::Normal(normal_move) => {
+                                        if normal_move.destination_row == row
+                                            && normal_move.destination_col == col
+                                        {
+                                            return true;
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        None => {
+                            continue;
                         }
                     }
                 }
@@ -766,7 +893,7 @@ pub mod chess {
 
         squares.reverse();
 
-        let res = Board {
+        let mut res = Board {
             squares: squares,
             turn: match meta_data.contains("w") {
                 true => White,
@@ -783,8 +910,10 @@ pub mod chess {
                 }),
             },
             is_check: None,
-            is_checkmate: None
+            is_checkmate: None,
         };
+
+        res.update_flags();
 
         Ok(res)
     }
