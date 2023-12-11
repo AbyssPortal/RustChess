@@ -23,17 +23,17 @@ pub mod chess_io {
     }
 
     impl Board {
-        pub fn print_board<W>(&self, output : &mut W)
-        where W: std::io::Write {
+        pub fn print_board<W>(&self, output : &mut W)  -> Result<(), std::io::Error> 
+        where W: std::io::Write{
             for i in (0..BOARD_SIZE).rev() {
-                print!("{} ", i + 1);
+                write!(output, "{} ", i + 1)?;
                 for j in 0..BOARD_SIZE {
                     match self.get_piece(i, j).unwrap() {
                         Some(piece) => {
-                            print!("{} ", to_emoji(&piece))
+                            write!(output, "{} ", to_emoji(&piece))?;
                         }
                         None => {
-                            print!(
+                            write!( output,
                                 "{} ",
                                 match (i + j) % 2 {
                                     1 => '■', //'🔲',
@@ -42,26 +42,26 @@ pub mod chess_io {
                                         panic!("unreachable");
                                     }
                                 }
-                            )
+                            )?;
                         }
                     }
                 }
-                println!();
+                writeln!(output)?;
             }
-            println!(
+            writeln!(output,
                 "  A B C D E F G H      Turn: {}",
                 self.get_turn().to_string()
-            );
+            )?;
             match (self.is_check, self.is_checkmate) {
                 (_, Some(color)) => {
-                    writeln!(output, "{} is checkmated!", color.to_string()).unwrap();
+                    writeln!(output, "{} is checkmated!", color.to_string())?;
                 }
                 (Some(color), None) => {
-                    writeln!(output, "{} is checked!", color.to_string()).unwrap()
+                    writeln!(output, "{} is checked!", color.to_string())?;
                 }
                 (None, None) => {}
             }
-            output.flush().unwrap();
+            output.flush()
         }
 
         //interpret moves such as "Nf3" or "e4". cares for upper/lowercase.

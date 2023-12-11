@@ -849,7 +849,7 @@ pub mod chess {
         MetaDataError,
     }
 
-    fn make_default_board() -> Board {
+    pub fn make_default_board() -> Board {
         let board =
             make_board_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR/ w KQkq - 0 1");
         match board {
