@@ -62,8 +62,8 @@ pub mod chess_io {
             }
         }
 
-        //interpert moves such as "Nf3" or "e4". cares for upper/lowercase.
-        pub fn interpert_move(&self, move_text: &str) -> Result<ChessMove, AlgebraicChessError> {
+        //interpret moves such as "Nf3" or "e4". cares for upper/lowercase.
+        pub fn interpret_move(&self, move_text: &str) -> Result<ChessMove, AlgebraicChessError> {
             use ChessMove::*;
             if move_text[0..min(move_text.len(), 5)].eq_ignore_ascii_case("O-O-O") {
                 return Ok(Castling(Castles {
@@ -99,7 +99,7 @@ pub mod chess_io {
                                     'Q' => PieceKind::Queen,
                                     'K' => PieceKind::King,
                                     _ => {
-                                        panic!("inaccesible")
+                                        panic!("inaccessible")
                                     }
                                 };
                                 let first =

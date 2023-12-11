@@ -12,7 +12,7 @@ fn main() {
     while def_board.is_checkmate.is_none() {
         def_board.print_board();
         let move_string: String = read!();
-        match def_board.interpert_move(&move_string) {
+        match def_board.interpret_move(&move_string) {
             Ok(chess_move) => match def_board.make_legal_move(chess_move) {
                 Err(BoardError::IllegalMoveError) => {
                     println!("That's illegal silly!");

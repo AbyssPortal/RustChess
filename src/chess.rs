@@ -1,6 +1,7 @@
 #[allow(dead_code)]
 pub mod chess {
     use core::panic;
+    use std::fmt::Display;
 
     pub const BOARD_SIZE: usize = 8;
 
@@ -16,12 +17,13 @@ pub mod chess {
         Black,
     }
 
-    impl ToString for Color {
-        fn to_string(&self) -> String {
-            String::from(match self {
+    impl Display for Color {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let str = String::from(match self {
                 Self::White => "White",
                 Self::Black => "Black",
-            })
+            });
+            write!(f, "{}", str)
         }
     }
 
@@ -292,7 +294,7 @@ pub mod chess {
                 ChessMove::Promotion(normal_move, kind) => {
                     self.squares[normal_move.destination_row][normal_move.destination_col] =
                         Some(Piece {
-                            kind: kind,
+                            kind,
                             color: self.squares[normal_move.initial_row][normal_move.initial_col]
                                 .ok_or(BoardError::NoPieceError)?
                                 .color,
@@ -318,7 +320,7 @@ pub mod chess {
             let piece_option = self.get_piece(origin_row, origin_col)?;
             match piece_option {
                 Some(piece) => {
-                    let res: Vec<ChessMove> = match piece {
+                    Ok(match piece {
                         Piece { kind: Rook, color } => {
                             //right, up, left, down
                             let mut moves = self.generate_linear_moves(
@@ -540,10 +542,8 @@ pub mod chess {
                             }
                             moves
                         }
-                    };
-                    return Ok(res);
+                    })
                 }
-
                 None => return Err(BoardError::NoPieceError),
             }
         }
@@ -618,8 +618,8 @@ pub mod chess {
             Some(NormalChessMove {
                 initial_row: origin_row,
                 initial_col: origin_col,
-                destination_row: destination_row,
-                destination_col: destination_col,
+                destination_row,
+                destination_col,
             })
         }
 
@@ -648,8 +648,8 @@ pub mod chess {
             Some(NormalChessMove {
                 initial_row: origin_row,
                 initial_col: origin_col,
-                destination_row: destination_row,
-                destination_col: destination_col,
+                destination_row,
+                destination_col,
             })
         }
 
@@ -678,8 +678,8 @@ pub mod chess {
             Some(NormalChessMove {
                 initial_row: origin_row,
                 initial_col: origin_col,
-                destination_row: destination_row,
-                destination_col: destination_col,
+                destination_row,
+                destination_col,
             })
         }
 
@@ -894,7 +894,7 @@ pub mod chess {
         squares.reverse();
 
         let mut res = Board {
-            squares: squares,
+            squares,
             turn: match meta_data.contains("w") {
                 true => White,
                 false => Black,
@@ -948,8 +948,8 @@ pub mod chess {
                             false => Black,
                         };
                         *square = Some(Piece {
-                            kind: kind,
-                            color: color,
+                            kind,
+                            color,
                         });
                         letter_option = letters.next();
                     } else if c.is_ascii_digit() {
