@@ -1,3 +1,5 @@
+
+
 use text_io::*;
 
 mod chess;
@@ -8,9 +10,10 @@ fn main() {
     let mut def_board =
         make_board_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR/ w KQkq - 0 1").unwrap();
 
+        let mut output = std::io::stdout();
 
     while def_board.is_checkmate.is_none() {
-        def_board.print_board();
+        def_board.print_board(&mut output);
         let move_string: String = read!();
         match def_board.interpret_move(&move_string) {
             Ok(chess_move) => match def_board.make_legal_move(chess_move) {
@@ -30,5 +33,5 @@ fn main() {
             }
         }
     }
-    def_board.print_board();
+    def_board.print_board(&mut output);
 }

@@ -6,8 +6,8 @@ pub mod chess_io {
 
     //i fucking hate that i need to do this
 
-    fn abc_to_position(letter: char) -> Option<usize> {
-        return "abcdefghijlkmnopqrstuvwxyz".find(letter);
+    fn letter_to_position(letter: char) -> Option<usize> {
+        return "abcdefgh".find(letter);
     }
 
     fn digit_to_position(letter: char) -> Option<usize> {
@@ -23,7 +23,8 @@ pub mod chess_io {
     }
 
     impl Board {
-        pub fn print_board(&self) {
+        pub fn print_board<W>(&self, output : &mut W)
+        where W: std::io::Write {
             for i in (0..BOARD_SIZE).rev() {
                 print!("{} ", i + 1);
                 for j in 0..BOARD_SIZE {
@@ -35,8 +36,8 @@ pub mod chess_io {
                             print!(
                                 "{} ",
                                 match (i + j) % 2 {
-                                    1 => '■',//'🔲',
-                                    0 => '□',//'⬛',
+                                    1 => '■', //'🔲',
+                                    0 => '□', //'⬛',
                                     _ => {
                                         panic!("unreachable");
                                     }
@@ -53,13 +54,14 @@ pub mod chess_io {
             );
             match (self.is_check, self.is_checkmate) {
                 (_, Some(color)) => {
-                    println!("{} is checkmated!", color.to_string())
+                    writeln!(output, "{} is checkmated!", color.to_string()).unwrap();
                 }
                 (Some(color), None) => {
-                    println!("{} is checked!", color.to_string())
+                    writeln!(output, "{} is checked!", color.to_string()).unwrap()
                 }
                 (None, None) => {}
             }
+            output.flush().unwrap();
         }
 
         //interpret moves such as "Nf3" or "e4". cares for upper/lowercase.
@@ -120,24 +122,13 @@ pub mod chess_io {
                             {
                                 let second =
                                     chars.next().ok_or(AlgebraicChessError::ExpectedMoreError)?;
-                                match second.is_ascii_alphabetic() {
-                                    true => self.generate_algebraic_move_data_from_squares(
-                                        second,
-                                        chars
-                                            .next()
-                                            .ok_or(AlgebraicChessError::ExpectedMoreError)?,
-                                        None,
-                                        None,
-                                        PieceKind::Pawn,
-                                    )?,
-                                    false => self.generate_algebraic_move_data_from_squares(
-                                        letter,
-                                        second,
-                                        chars.next(),
-                                        chars.next(),
-                                        PieceKind::Pawn,
-                                    )?,
-                                }
+                                self.generate_algebraic_move_data_from_squares(
+                                    letter,
+                                    second,
+                                    chars.next(),
+                                    chars.next(),
+                                    PieceKind::Pawn,
+                                )?
                             },
                             {
                                 let mut reverse_iter = move_text
@@ -228,7 +219,7 @@ pub mod chess_io {
                     },
                     destination_row: digit_to_position(second)
                         .ok_or(AlgebraicChessError::UnexpectedCharError(second))?,
-                    destination_col: abc_to_position(first)
+                    destination_col: letter_to_position(first)
                         .ok_or(AlgebraicChessError::UnexpectedCharError(first))?,
                     origin_row: None,
                     origin_col: None,
@@ -242,11 +233,11 @@ pub mod chess_io {
                             },
                             destination_row: digit_to_position(third_letter)
                                 .ok_or(AlgebraicChessError::UnexpectedCharError(third_letter))?,
-                            destination_col: abc_to_position(second)
+                            destination_col: letter_to_position(second)
                                 .ok_or(AlgebraicChessError::UnexpectedCharError(second))?,
                             origin_row: None,
                             origin_col: Some(
-                                abc_to_position(first)
+                                letter_to_position(first)
                                     .ok_or(AlgebraicChessError::UnexpectedCharError(first))?,
                             ),
                         }),
@@ -257,7 +248,7 @@ pub mod chess_io {
                             },
                             destination_row: digit_to_position(third_letter)
                                 .ok_or(AlgebraicChessError::UnexpectedCharError(third_letter))?,
-                            destination_col: abc_to_position(second)
+                            destination_col: letter_to_position(second)
                                 .ok_or(AlgebraicChessError::UnexpectedCharError(second))?,
                             origin_row: Some(
                                 digit_to_position(first)
@@ -273,14 +264,14 @@ pub mod chess_io {
                         },
                         destination_row: digit_to_position(fourth_letter)
                             .ok_or(AlgebraicChessError::UnexpectedCharError(fourth_letter))?,
-                        destination_col: abc_to_position(third_letter)
+                        destination_col: letter_to_position(third_letter)
                             .ok_or(AlgebraicChessError::UnexpectedCharError(third_letter))?,
                         origin_row: Some(
                             digit_to_position(second)
                                 .ok_or(AlgebraicChessError::UnexpectedCharError(second))?,
                         ),
                         origin_col: Some(
-                            abc_to_position(first)
+                            letter_to_position(first)
                                 .ok_or(AlgebraicChessError::UnexpectedCharError(first))?,
                         ),
                     }),

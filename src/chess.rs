@@ -107,13 +107,6 @@ pub mod chess {
         row < BOARD_SIZE && col < BOARD_SIZE
     }
 
-    #[test]
-    fn test_rook_moves() {
-        let board = make_board_from_fen("8/8/8/4R3/8/8/8/8/ w KQkq - 0 1").unwrap();
-        board.print_board();
-        let res = board.generate_moves(4, 4);
-        println!("{:?}", res.unwrap().len());
-    }
 
     struct PromotionIterator<I>
     where
@@ -864,7 +857,7 @@ pub mod chess {
                 return res;
             }
             Err(_) => {
-                panic!("make_default_board test failed horrifically.");
+                panic!("make_default_board failed horrifically.");
             }
         }
     }
