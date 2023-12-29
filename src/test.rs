@@ -3,7 +3,7 @@ mod test {
     use crate::chess::chess::*;
 
     fn generic_test(moves: Vec<&str>, expected_output: &str) {
-        let mut board = make_default_board();
+        let mut board = Board::new();
         let mut buffer = Vec::<u8>::new();
         board.print_board(&mut buffer).unwrap();
         for move_text in moves {

@@ -8,9 +8,7 @@ mod chess_io;
 
 fn main() {
     use chess::chess::*;
-    let mut def_board =
-        make_board_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR/ w KQkq - 0 1").unwrap();
-
+    let mut def_board = Board::new();
         let mut output = std::io::stdout();
 
     while def_board.is_checkmate.is_none() {

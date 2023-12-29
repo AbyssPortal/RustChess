@@ -1,4 +1,3 @@
-#[allow(dead_code)]
 pub mod chess {
     use core::panic;
     use std::fmt::Display;
@@ -107,6 +106,7 @@ pub mod chess {
         row < BOARD_SIZE && col < BOARD_SIZE
     }
 
+   
 
     struct PromotionIterator<I>
     where
@@ -123,15 +123,9 @@ pub mod chess {
         type Item = ChessMove;
         fn next(&mut self) -> Option<ChessMove> {
             match kind_from_letter(self.pieces_iterator.next()?)? {
-            PieceKind::Pawn => 
-            Some(ChessMove::Normal(self.base_move)),
-            other => {
-                Some(ChessMove::Promotion(
-                    self.base_move,
-                    other,
-                ))
+                PieceKind::Pawn => Some(ChessMove::Normal(self.base_move)),
+                other => Some(ChessMove::Promotion(self.base_move, other)),
             }
-        }
         }
     }
 
@@ -810,6 +804,15 @@ pub mod chess {
             }
             false
         }
+
+        pub fn new() -> Board {
+            let board =
+                make_board_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR/ w KQkq - 0 1");
+            match board {
+                Ok(res) => res,
+                Err(_) => panic!("make_default_board failed horrifically."),
+            }
+        }
     }
 
     #[derive(Debug, Clone)]
@@ -844,22 +847,7 @@ pub mod chess {
         UnrecognizedCharacter(char),
         RowUnfinished,
         NotEnoughLines,
-        LineTooLong,
-        TooManyLines,
         MetaDataError,
-    }
-
-    pub fn make_default_board() -> Board {
-        let board =
-            make_board_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR/ w KQkq - 0 1");
-        match board {
-            Ok(res) => {
-                return res;
-            }
-            Err(_) => {
-                panic!("make_default_board failed horrifically.");
-            }
-        }
     }
 
     pub fn make_board_from_fen(fen: &str) -> Result<Board, FenError> {
@@ -940,10 +928,7 @@ pub mod chess {
                             true => White,
                             false => Black,
                         };
-                        *square = Some(Piece {
-                            kind,
-                            color,
-                        });
+                        *square = Some(Piece { kind, color });
                         letter_option = letters.next();
                     } else if c.is_ascii_digit() {
                         //this is safe.

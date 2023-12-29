@@ -2,7 +2,6 @@
 pub mod chess_io {
 
     use crate::chess::chess::*;
-    use core::cmp::min;
 
     //i fucking hate that i need to do this
 
@@ -23,6 +22,39 @@ pub mod chess_io {
     }
 
     impl Board {
+        
+        /// Prints the current state of the chess board to a given output stream.
+        ///
+        /// # Arguments
+        ///
+        /// * `output` - A mutable reference to an output stream that implements `std::io::Write`.
+        ///
+        /// # Returns
+        ///
+        /// * `Result<(), std::io::Error>` - Returns `Ok(())` if the board was successfully printed, or an `Err` with the associated `std::io::Error` if an error occurred.
+        ///
+        /// # Behavior
+        ///
+        /// This function iterates over the chess board in reverse row order (from 8 to 1) and column order (from A to H). For each cell, it prints the emoji representation of the piece if there is one, or a square emoji representing the color of the cell if there is no piece. The color of the square depends on whether the sum of the row and column indices is even or odd, creating a checkerboard pattern.
+        ///
+        /// After printing all cells in a row, it prints a newline character. After printing all rows, it prints the column labels (A to H) and the current turn.
+        ///
+        /// If the game is in checkmate, it prints a message stating which color is checkmated. If the game is in check but not checkmate, it prints a message stating which color is in check. If the game is neither in check nor checkmate, it does nothing.
+        ///
+        /// Finally, it flushes the output stream to ensure that all buffered output is actually written to the underlying stream. This is important for `Write` implementations that may buffer output for efficiency, such as file or network streams.
+        ///
+        /// # Panics
+        ///
+        /// This function panics if the sum of the row and column indices is not 0 or 1, which should be unreachable.
+        ///
+        /// # Examples
+        ///
+        /// ```
+        /// let mut game = Board::new();
+        /// let mut output = String::new();
+        /// game.print_board(&mut output).unwrap();
+        /// println!("{}", output);
+        /// ```
         pub fn print_board<W>(&self, output : &mut W)  -> Result<(), std::io::Error> 
         where W: std::io::Write{
             for i in (0..BOARD_SIZE).rev() {
@@ -67,12 +99,12 @@ pub mod chess_io {
         //interpret moves such as "Nf3" or "e4". cares for upper/lowercase.
         pub fn interpret_move(&self, move_text: &str) -> Result<ChessMove, AlgebraicChessError> {
             use ChessMove::*;
-            if move_text[0..min(move_text.len(), 5)].eq_ignore_ascii_case("O-O-O") {
+            if move_text.to_ascii_uppercase().starts_with("O-O-O") {
                 return Ok(Castling(Castles {
                     color: self.get_turn(),
                     side: CastleSide::QueenSide,
                 }));
-            } else if move_text[0..min(move_text.len(), 3)].eq_ignore_ascii_case("O-O") {
+            } else if move_text.to_ascii_uppercase().starts_with("O-O") {
                 return Ok(Castling(Castles {
                     color: self.get_turn(),
                     side: CastleSide::KingSide,
