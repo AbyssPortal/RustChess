@@ -1,6 +1,7 @@
 #[allow(dead_code)]
 pub mod chess_io {
 
+    use text_io::read;
     use crate::chess::chess::*;
 
     //i fucking hate that i need to do this
@@ -22,7 +23,6 @@ pub mod chess_io {
     }
 
     impl Board {
-        
         /// Prints the current state of the chess board to a given output stream.
         ///
         /// # Arguments
@@ -55,8 +55,10 @@ pub mod chess_io {
         /// game.print_board(&mut output).unwrap();
         /// println!("{}", output);
         /// ```
-        pub fn print_board<W>(&self, output : &mut W)  -> Result<(), std::io::Error> 
-        where W: std::io::Write{
+        pub fn print_board<W>(&self, output: &mut W) -> Result<(), std::io::Error>
+        where
+            W: std::io::Write,
+        {
             for i in (0..BOARD_SIZE).rev() {
                 write!(output, "{} ", i + 1)?;
                 for j in 0..BOARD_SIZE {
@@ -65,7 +67,8 @@ pub mod chess_io {
                             write!(output, "{} ", to_emoji(&piece))?;
                         }
                         None => {
-                            write!( output,
+                            write!(
+                                output,
                                 "{} ",
                                 match (i + j) % 2 {
                                     1 => '■', //'🔲',
@@ -80,7 +83,8 @@ pub mod chess_io {
                 }
                 writeln!(output)?;
             }
-            writeln!(output,
+            writeln!(
+                output,
                 "  A B C D E F G H      Turn: {}",
                 self.get_turn().to_string()
             )?;
@@ -374,5 +378,33 @@ pub mod chess_io {
             } => '♟',
             //♚♛♝♞♟♜♔♕♗♘♙♖
         }
+    }
+
+    pub fn chess_game() {
+        let mut def_board = Board::new();
+        let mut output = std::io::stdout();
+
+        while def_board.is_checkmate.is_none() {
+            def_board.print_board(&mut output).unwrap();
+            let move_string: String = read!();
+            match def_board.interpret_move(&move_string) {
+                Ok(chess_move) => match def_board.make_legal_move(chess_move) {
+                    Err(BoardError::IllegalMoveError) => {
+                        println!("That's illegal silly!");
+                    }
+                    Err(BoardError::NoPieceError) => {
+                        println!("There's no piece there silly!");
+                    }
+                    Err(BoardError::OutOfBoundsError) => {
+                        print!("That's out of bounds silly!");
+                    }
+                    Ok(()) => {}
+                },
+                Err(err) => {
+                    println!("{:?}", err);
+                }
+            }
+        }
+        def_board.print_board(&mut output).unwrap();
     }
 }

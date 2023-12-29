@@ -106,7 +106,6 @@ pub mod chess {
         row < BOARD_SIZE && col < BOARD_SIZE
     }
 
-   
 
     struct PromotionIterator<I>
     where
