@@ -1,8 +1,8 @@
 #[allow(dead_code)]
 pub mod chess_io {
 
-    use text_io::read;
     use crate::chess::chess::*;
+    use text_io::read;
 
     //i fucking hate that i need to do this
 
@@ -13,6 +13,33 @@ pub mod chess_io {
     fn digit_to_position(letter: char) -> Option<usize> {
         return "123456789".find(letter);
     }
+    fn position_to_letter(position: usize) -> char {
+        match position {
+            0 => 'a',
+            1 => 'b',
+            2 => 'c',
+            3 => 'd',
+            4 => 'e',
+            5 => 'f',
+            6 => 'g',
+            7 => 'h',
+            _ => ' ',
+        }
+    }
+
+    fn position_to_digit(position: usize) -> char {
+        match position {
+            0 => '1',
+            1 => '2',
+            2 => '3',
+            3 => '4',
+            4 => '5',
+            5 => '6',
+            6 => '7',
+            7 => '8',
+            _ => ' ',
+        }
+    }
 
     struct AlgebraicMoveData {
         moving_piece: Piece,
@@ -20,6 +47,39 @@ pub mod chess_io {
         destination_col: usize,
         origin_row: Option<usize>,
         origin_col: Option<usize>,
+    }
+
+    impl ChessMove {
+        pub fn name(&self) -> String {
+            match *self {
+                ChessMove::Normal(normal_move) => {
+                    let a = position_to_letter(normal_move.initial_col);
+                    let b = position_to_digit(normal_move.initial_row);
+                    let c = position_to_letter(normal_move.destination_col);
+                    let d = position_to_digit(normal_move.destination_row);
+                    format!("{}{}{}{}", a, b, c, d)
+                }
+                Self::Castling(castles) => match castles.side {
+                    CastleSide::KingSide => {
+                        String::from("O-O")
+                    },
+                    CastleSide::QueenSide => {
+                        String::from("O-O-O")
+                    }
+                },
+                ChessMove::Promotion(normal_move, promotion_type) => {
+                    let piece_name = match promotion_type {
+                        PieceKind::Pawn => "p",
+                        PieceKind::Knight => "n",
+                        PieceKind::Bishop => "b",
+                        PieceKind::Rook => "r",
+                        PieceKind::Queen => "q",
+                        PieceKind::King => panic!("Invalid promotion type: King"),
+                    };
+                    ChessMove::Normal(normal_move).name() + "=" + piece_name
+                }
+            }
+        }
     }
 
     impl Board {
@@ -397,6 +457,9 @@ pub mod chess_io {
                     }
                     Err(BoardError::OutOfBoundsError) => {
                         print!("That's out of bounds silly!");
+                    }
+                    Err(BoardError::WrongTurnError) => {
+                        print!("Wrong turn silly!");
                     }
                     Ok(()) => {}
                 },

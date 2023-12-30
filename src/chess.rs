@@ -4,13 +4,13 @@ pub mod chess {
 
     pub const BOARD_SIZE: usize = 8;
 
-    #[derive(Copy, Clone, Debug, PartialEq)]
+    #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
     pub struct Piece {
         pub kind: PieceKind,
         pub color: Color,
     }
 
-    #[derive(Copy, Clone, PartialEq, Debug)]
+    #[derive(Copy, Clone, PartialEq, Debug, Eq, PartialOrd, Ord, Hash)]
     pub enum Color {
         White,
         Black,
@@ -35,7 +35,7 @@ pub mod chess {
         }
     }
 
-    #[derive(Copy, Clone, Debug, PartialEq)]
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
     pub enum PieceKind {
         Pawn,
         Rook,
@@ -58,7 +58,7 @@ pub mod chess {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
     pub struct Board {
         squares: [[Option<Piece>; BOARD_SIZE]; BOARD_SIZE],
         turn: Color,
@@ -72,21 +72,22 @@ pub mod chess {
         OutOfBoundsError,
         IllegalMoveError,
         NoPieceError,
+        WrongTurnError,
     }
 
-    #[derive(Debug, PartialEq, Clone, Copy)]
+    #[derive(Debug, PartialEq, Clone, Copy, Eq, PartialOrd, Ord, Hash)]
     pub enum CastleSide {
         KingSide,
         QueenSide,
     }
 
-    #[derive(Debug, PartialEq, Clone, Copy)]
+    #[derive(Debug, PartialEq, Clone, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct Castles {
         pub color: Color,
         pub side: CastleSide,
     }
 
-    #[derive(Debug, PartialEq, Clone, Copy)]
+    #[derive(Debug, PartialEq, Clone, Copy, Eq, PartialOrd, Ord, Hash)]
 
     //TODO: turn into enum with moves such as castles and en passent
     pub enum ChessMove {
@@ -94,7 +95,7 @@ pub mod chess {
         Castling(Castles),
         Promotion(NormalChessMove, PieceKind),
     }
-    #[derive(Debug, PartialEq, Clone, Copy)]
+    #[derive(Debug, PartialEq, Clone, Copy, Eq, PartialOrd, Ord, Hash)]
     pub struct NormalChessMove {
         pub initial_row: usize,
         pub initial_col: usize,
@@ -306,7 +307,12 @@ pub mod chess {
             let piece_option = self.get_piece(origin_row, origin_col)?;
             match piece_option {
                 Some(piece) => {
-                    Ok(match piece {
+                    if piece.color != self.turn {
+                        return Err(BoardError::WrongTurnError);
+                    }
+                    Ok(
+
+                        match piece {
                         Piece { kind: Rook, color } => {
                             //right, up, left, down
                             let mut moves = self.generate_linear_moves(
@@ -760,7 +766,7 @@ pub mod chess {
                             }
                         }
                         //unreachable
-                        Err(BoardError::NoPieceError) => {}
+                        Err(BoardError::NoPieceError | BoardError::WrongTurnError) => {}
                         Err(err) => {
                             panic!("{:?} in is_check", err)
                         }
@@ -814,7 +820,7 @@ pub mod chess {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
     struct CastleRights {
         white: OneSidedCastleRights,
         black: OneSidedCastleRights,
@@ -833,7 +839,7 @@ pub mod chess {
         }
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 
     struct OneSidedCastleRights {
         king: bool,
