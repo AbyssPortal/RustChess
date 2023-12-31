@@ -185,32 +185,8 @@ pub mod chess {
                     }
                 }
                 ChessMove::Castling(castle_move) => {
-                    let row = match castle_move.color {
-                        Color::White => 0,
-                        Color::Black => BOARD_SIZE - 1,
-                    };
-                    match castle_move.side {
-                        CastleSide::QueenSide => {
-                            if self.squares[row][1].is_some()
-                                || self.squares[row][2].is_some()
-                                || self.squares[row][3].is_some()
-                                || !self.castle_rights.at(self.turn, CastleSide::QueenSide)
-                                || self.is_check.is_some()
-                                || self.is_square_attacked(row, 3, self.turn)
-                            {
-                                return Err(BoardError::IllegalMoveError);
-                            }
-                        }
-                        CastleSide::KingSide => {
-                            if self.squares[row][5].is_some()
-                                || self.squares[row][6].is_some()
-                                || !self.castle_rights.at(self.turn, CastleSide::KingSide)
-                                || self.is_check.is_some()
-                                || self.is_square_attacked(row, 5, self.turn)
-                            {
-                                return Err(BoardError::IllegalMoveError);
-                            }
-                        }
+                    if !self.can_castle_check_for_check(castle_move) {
+                        return Err(BoardError::IllegalMoveError);
                     }
                 }
             }
@@ -222,6 +198,48 @@ pub mod chess {
                 return Err(BoardError::IllegalMoveError);
             }
             return Ok(());
+        }
+
+        fn can_castle_check_for_check(&self, castle_move: Castles) -> bool {
+            let row = match castle_move.color {
+                Color::Black => 7,
+                Color::White => 0,
+            };
+            let col = match castle_move.side {
+                CastleSide::KingSide => 5,
+                CastleSide::QueenSide => 3,
+            };
+            !self.is_square_attacked(row, col, self.turn) && self.can_castle(castle_move)
+
+        }
+
+        fn can_castle(&self, castle_move: Castles) -> bool {
+            let row = match castle_move.color {
+                Color::Black => 7,
+                Color::White => 0,
+            };
+            match castle_move.side {
+                CastleSide::QueenSide => {
+                    if self.squares[row][1].is_some()
+                        || self.squares[row][2].is_some()
+                        || self.squares[row][3].is_some()
+                        || !self.castle_rights.at(self.turn, CastleSide::QueenSide)
+                        || self.is_check.is_some()
+                    {
+                        return false;
+                    }
+                }
+                CastleSide::KingSide => {
+                    if self.squares[row][5].is_some()
+                        || self.squares[row][6].is_some()
+                        || !self.castle_rights.at(self.turn, CastleSide::KingSide)
+                        || self.is_check.is_some()
+                    {
+                        return false;
+                    }
+                }
+            }
+            true
         }
 
         fn make_move(&mut self, chess_move: ChessMove) -> Result<(), BoardError> {
@@ -436,6 +454,12 @@ pub mod chess {
                     moves.extend(
                         self.generate_linear_moves(origin_row, origin_col, 0, -1, color, 1),
                     );
+                    if self.can_castle(Castles { color, side: CastleSide::KingSide }) {
+                        moves.push(ChessMove::Castling(Castles { color, side: CastleSide::KingSide }));
+                    }
+                    if self.can_castle(Castles { color, side: CastleSide::QueenSide }) {
+                        moves.push(ChessMove::Castling(Castles { color, side: CastleSide::QueenSide }));
+                    }
                     moves
                 }
                 Piece {
@@ -469,7 +493,7 @@ pub mod chess {
                     let mut moves = Vec::<ChessMove>::new();
                     match color {
                         Color::White => {
-                            if origin_row == 1 {
+                            if origin_row == 1 && self.get_piece(2, origin_col).unwrap() == None {
                                 match self.try_move_no_attack(
                                     origin_row,
                                     origin_col,
@@ -518,7 +542,7 @@ pub mod chess {
                         }
 
                         Color::Black => {
-                            if origin_row == 6 {
+                            if origin_row == 6 && self.get_piece(5, origin_col).unwrap() == None {
                                 match self.try_move_no_attack(
                                     origin_row,
                                     origin_col,
@@ -774,7 +798,7 @@ pub mod chess {
                             continue;
                         }
                     }
-                    match self.generate_moves(i, j) {
+                    match self.generate_moves_ignore_turn(i, j) {
                         Ok(moves) => {
                             for chess_move in moves {
                                 match chess_move {
@@ -798,7 +822,7 @@ pub mod chess {
                             }
                         }
                         //unreachable
-                        Err(BoardError::NoPieceError | BoardError::WrongTurnError) => {}
+                        Err(BoardError::NoPieceError /*| BoardError::WrongTurnError*/) => {}
                         Err(err) => {
                             panic!("{:?} in is_check", err)
                         }
@@ -820,7 +844,7 @@ pub mod chess {
                             if color == piece_color {
                                 continue;
                             }
-                            for chess_move in self.generate_moves(i, j).expect("bounds check") {
+                            for chess_move in self.generate_moves_ignore_turn(i, j).expect("bounds check") {
                                 match chess_move {
                                     ChessMove::Normal(normal_move) => {
                                         if normal_move.destination_row == row
