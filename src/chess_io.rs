@@ -41,6 +41,17 @@ pub mod chess_io {
         }
     }
 
+    fn kind_to_letter(kind: PieceKind) -> &'static str {
+        match kind {
+            PieceKind::Pawn => "",
+            PieceKind::Knight => "N",
+            PieceKind::Bishop => "B",
+            PieceKind::Rook => "R",
+            PieceKind::Queen => "Q",
+            PieceKind::King => "K",
+        }
+    }
+
     struct AlgebraicMoveData {
         moving_piece: Piece,
         destination_row: usize,
@@ -50,14 +61,26 @@ pub mod chess_io {
     }
 
     impl ChessMove {
-        pub fn name(&self) -> String {
-            match *self {
+        pub fn name(&self, board: &Board) -> Result<String, BoardError> {
+            let res = match *self {
                 ChessMove::Normal(normal_move) => {
+                    let kind = match board.get_piece(normal_move.initial_row, normal_move.initial_col)? {
+                        Some(piece) => {
+                            kind_to_letter(piece.kind)
+                        }
+                        None => {
+                            return Err(BoardError::NoPieceError);
+                        }
+                    };
                     let a = position_to_letter(normal_move.initial_col);
                     let b = position_to_digit(normal_move.initial_row);
                     let c = position_to_letter(normal_move.destination_col);
                     let d = position_to_digit(normal_move.destination_row);
-                    format!("{}{}{}{}", a, b, c, d)
+                    let takes = match board.get_piece(normal_move.destination_row, normal_move.destination_col)?.is_none() {
+                        false => "x",
+                        true => ""
+                    };
+                    format!("{}{}{}{}{}{}", kind,  a, b, takes, c, d)
                 }
                 Self::Castling(castles) => match castles.side {
                     CastleSide::KingSide => {
@@ -68,17 +91,11 @@ pub mod chess_io {
                     }
                 },
                 ChessMove::Promotion(normal_move, promotion_type) => {
-                    let piece_name = match promotion_type {
-                        PieceKind::Pawn => "p",
-                        PieceKind::Knight => "n",
-                        PieceKind::Bishop => "b",
-                        PieceKind::Rook => "r",
-                        PieceKind::Queen => "q",
-                        PieceKind::King => panic!("Invalid promotion type: King"),
-                    };
-                    ChessMove::Normal(normal_move).name() + "=" + piece_name
+                    let piece_name = kind_to_letter(promotion_type);
+                    ChessMove::Normal(normal_move).name(board)? + "=" + piece_name
                 }
-            }
+            };
+            Ok(res)
         }
     }
 
