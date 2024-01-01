@@ -166,8 +166,8 @@ pub mod chess_io {
                 self.get_turn().to_string()
             )?;
             match (self.is_check, self.is_checkmate) {
-                (_, Some(color)) => {
-                    writeln!(output, "{} is checkmated!", color.to_string())?;
+                (_, Some(game_end_condition)) => {
+                    writeln!(output, "{}", game_end_condition.to_string())?;
                 }
                 (Some(color), None) => {
                     writeln!(output, "{} is checked!", color.to_string())?;
